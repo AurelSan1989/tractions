@@ -85,6 +85,25 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
+// Confirmation dans l'appli (confirm() natif est bloqué par certains navigateurs et applis installées)
+function ask(message, okLabel = 'Confirmer', danger = false) {
+  return new Promise(resolve => {
+    const modal = $('#modal'), ok = $('#modal-ok'), cancel = $('#modal-cancel');
+    $('#modal-msg').textContent = message;
+    ok.textContent = okLabel;
+    ok.classList.toggle('danger-fill', danger);
+    modal.hidden = false;
+    ok.focus();
+    const done = v => {
+      modal.hidden = true;
+      ok.onclick = cancel.onclick = modal.onclick = null;
+      resolve(v);
+    };
+    ok.onclick = () => done(true);
+    cancel.onclick = () => done(false);
+    modal.onclick = e => { if (e.target === modal) done(false); };
+  });
+}
 const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
 
 const TITLES = { log: 'Nouvelle séance', stats: 'Progrès', history: 'Historique', settings: 'Réglages' };
@@ -370,7 +389,7 @@ function renderHistory() {
     </li>`;
   }).join('');
 }
-$('#history').addEventListener('click', e => {
+$('#history').addEventListener('click', async e => {
   const edit = e.target.closest('[data-edit]');
   const del = e.target.closest('[data-delete]');
   if (edit) {
@@ -378,14 +397,14 @@ $('#history').addEventListener('click', e => {
     if (!s) return;
     const d = db.draft;
     if (d && d.sets.length && d.id !== s.id &&
-        !confirm('Une séance est en cours de saisie. La remplacer par celle-ci ?')) return;
+        !(await ask('Une séance est en cours de saisie. La remplacer par celle-ci ?', 'Remplacer'))) return;
     db.draft = JSON.parse(JSON.stringify({ id: s.id, date: s.date, sets: s.sets, note: s.note || '' }));
     save();
     initSelection();
     showTab('log');
   } else if (del) {
     const s = db.sessions.find(x => x.id === del.dataset.delete);
-    if (!s || !confirm(`Supprimer la séance du ${fmtDate(s.date, { day: 'numeric', month: 'long' })} ?`)) return;
+    if (!s || !(await ask(`Supprimer la séance du ${fmtDate(s.date, { day: 'numeric', month: 'long' })} ?`, 'Supprimer', true))) return;
     db.sessions = db.sessions.filter(x => x.id !== s.id);
     if (db.draft && db.draft.id === s.id) db.draft = null;
     save();
@@ -443,18 +462,18 @@ $('#import-file').addEventListener('change', async e => {
       s && typeof s.date === 'string' && Array.isArray(s.sets) &&
       s.sets.every(x => x && Number.isFinite(x.reps) && Array.isArray(x.bands) && x.bands.every(bandById)));
     if (!valid) throw new Error('format');
-    if (!confirm(`Importer ${plural(d.sessions.length, 'séance')} ? Les données actuelles seront remplacées.`)) return;
+    if (!(await ask(`Importer ${plural(d.sessions.length, 'séance')} ? Les données actuelles seront remplacées.`, 'Importer'))) return;
     db.sessions = d.sessions.map(s => ({ ...s, id: s.id || uid() }));
     db.bandKg = d.bandKg && typeof d.bandKg === 'object' ? d.bandKg : {};
     save();
     toast('Sauvegarde importée');
     showTab('stats');
   } catch (err) {
-    alert("Ce fichier n'est pas une sauvegarde valide de l'appli Tractions.");
+    toast("Ce fichier n'est pas une sauvegarde valide");
   }
 });
-$('#wipe').addEventListener('click', () => {
-  if (!confirm('Effacer toutes les séances et réglages ? Cette action est définitive.')) return;
+$('#wipe').addEventListener('click', async () => {
+  if (!(await ask('Effacer toutes les séances et réglages ? Cette action est définitive.', 'Tout effacer', true))) return;
   db = defaultDb();
   save();
   sel = []; reps = 5;

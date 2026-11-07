@@ -1,5 +1,5 @@
 // Incrémente ce numéro à chaque mise en ligne d'une nouvelle version
-const CACHE = 'tractions-v2';
+const CACHE = 'tractions-v3';
 const ASSETS = [
   './',
   'index.html',
