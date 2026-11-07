@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tractions</title>
+  <meta name="description" content="Suivi des séances de tractions assistées par élastique">
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Tractions">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1 id="title">Nouvelle séance</h1>
+  </header>
+
+  <main>
+    <!-- SÉANCE -->
+    <section id="view-log" class="view active">
+      <label class="field">
+        <span>Date</span>
+        <input type="date" id="log-date">
+      </label>
+
+      <h2>Élastique(s)</h2>
+      <div class="bands" id="band-picker"></div>
+      <p class="assist" id="assist-label"></p>
+
+      <h2>Répétitions</h2>
+      <div class="stepper">
+        <button type="button" id="reps-minus" aria-label="Moins une répétition">−</button>
+        <output id="reps" aria-live="polite">5</output>
+        <button type="button" id="reps-plus" aria-label="Plus une répétition">+</button>
+      </div>
+
+      <button type="button" class="btn primary" id="add-set">Ajouter la série</button>
+
+      <h2>Séries <span class="muted" id="set-count"></span></h2>
+      <ol class="set-list" id="set-list"></ol>
+
+      <label class="field">
+        <span>Note (facultatif)</span>
+        <textarea id="log-note" rows="2" placeholder="Forme du jour, sensations…"></textarea>
+      </label>
+
+      <button type="button" class="btn primary" id="save-session">Enregistrer la séance</button>
+      <button type="button" class="btn ghost" id="cancel-edit" hidden>Annuler la modification</button>
+    </section>
+
+    <!-- PROGRÈS -->
+    <section id="view-stats" class="view">
+      <div class="kpis" id="kpis"></div>
+      <div class="card">
+        <h3>Aide moyenne par séance</h3>
+        <p class="sub">Plus la courbe descend, plus elle tire seule.</p>
+        <div id="chart-assist"></div>
+      </div>
+      <div class="card">
+        <h3>Répétitions par séance</h3>
+        <div id="chart-volume"></div>
+      </div>
+      <div class="card">
+        <h3>Records par élastique</h3>
+        <p class="sub">Meilleure série (répétitions) avec chaque configuration.</p>
+        <div id="records"></div>
+      </div>
+      <div class="card">
+        <h3>Jalons</h3>
+        <ol class="milestones" id="milestones"></ol>
+      </div>
+    </section>
+
+    <!-- HISTORIQUE -->
+    <section id="view-history" class="view">
+      <ul class="history" id="history"></ul>
+    </section>
+
+    <!-- RÉGLAGES -->
+    <section id="view-settings" class="view">
+      <div class="card">
+        <h3>Aide de chaque élastique</h3>
+        <p class="sub">Par défaut : milieu de la fourchette du fabricant. Les élastiques combinés s'additionnent.</p>
+        <div id="band-settings"></div>
+        <button type="button" class="btn ghost" id="reset-bands">Revenir aux valeurs par défaut</button>
+      </div>
+      <div class="card">
+        <h3>Sauvegarde</h3>
+        <p class="sub">Les données restent sur ce téléphone. Exporte-les de temps en temps.</p>
+        <button type="button" class="btn" id="export">Exporter (fichier JSON)</button>
+        <button type="button" class="btn" id="import">Importer une sauvegarde</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+      <div class="card">
+        <h3>Zone dangereuse</h3>
+        <button type="button" class="btn danger" id="wipe">Effacer toutes les données</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Navigation">
+    <button type="button" data-tab="log" class="active"><span class="ico">＋</span>Séance</button>
+    <button type="button" data-tab="stats"><span class="ico">📈</span>Progrès</button>
+    <button type="button" data-tab="history"><span class="ico">🗓</span>Historique</button>
+    <button type="button" data-tab="settings"><span class="ico">⚙</span>Réglages</button>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
