@@ -54,7 +54,12 @@ const bandKg = id => {
 const sortBands = bands => [...bands].sort((a, b) => BAND_ORDER.indexOf(a) - BAND_ORDER.indexOf(b));
 const assistOf = bands => bands.reduce((s, id) => s + bandKg(id), 0);
 const comboKey = bands => sortBands(bands).join('+');
-const comboName = key => key ? key.split('+').map(id => bandById(id).name).join(' + ') : 'Sans élastique';
+const comboName = key => {
+  if (!key) return 'Sans élastique';
+  const counts = new Map();
+  key.split('+').forEach(id => counts.set(id, (counts.get(id) || 0) + 1));
+  return [...counts].map(([id, n]) => (n > 1 ? `${n} × ` : '') + bandById(id).name).join(' + ');
+};
 const chips = bands => bands.length
   ? bands.map(id => { const b = bandById(id); return `<span class="chip" style="--c:${b.color}" title="${b.name}"></span>`; }).join('')
   : '<span class="chip chip-none" title="Sans élastique"></span>';
@@ -100,8 +105,11 @@ function render() {
 }
 
 /* ---------- Saisie d'une séance ---------- */
-let sel = new Set();
+// Élastiques sélectionnés, doublons permis (ex. ['green', 'green'])
+let sel = [];
 let reps = 5;
+const MAX_SAME = 3; // nombre max d'élastiques de la même couleur
+const countSel = id => sel.filter(x => x === id).length;
 
 function ensureDraft() {
   if (!db.draft) db.draft = { id: null, date: today(), sets: [], note: '' };
@@ -114,7 +122,7 @@ function initSelection() {
     const s = sortedSessions().pop();
     return s && s.sets[s.sets.length - 1];
   })();
-  if (last) { sel = new Set(last.bands); reps = last.reps; }
+  if (last) { sel = [...last.bands]; reps = last.reps; }
 }
 
 function renderLog() {
@@ -122,12 +130,17 @@ function renderLog() {
   $('#log-date').value = d.date;
   $('#log-note').value = d.note || '';
 
-  const picker = BANDS.map(b => `
-    <button type="button" class="band ${sel.has(b.id) ? 'on' : ''}" data-band="${b.id}"
-      style="--c:${b.color};--t:${b.text}" aria-pressed="${sel.has(b.id)}">
+  const picker = BANDS.map(b => {
+    const n = countSel(b.id);
+    return `
+    <button type="button" class="band ${n ? 'on' : ''}" data-band="${b.id}"
+      style="--c:${b.color};--t:${b.text}" aria-pressed="${n > 0}"
+      aria-label="${b.name}${n ? ', ' + n + ' sélectionné' + (n > 1 ? 's' : '') : ''}">
+      ${n > 1 ? `<span class="badge">×${n}</span>` : ''}
       ${b.name}<small>${fmtKg(bandKg(b.id))}</small>
-    </button>`).join('') + `
-    <button type="button" class="band none ${sel.size ? '' : 'on'}" data-band="" aria-pressed="${!sel.size}">
+    </button>`;
+  }).join('') + `
+    <button type="button" class="band none ${sel.length ? '' : 'on'}" data-band="" aria-pressed="${!sel.length}">
       Sans<small>0 kg</small>
     </button>`;
   $('#band-picker').innerHTML = picker;
@@ -160,9 +173,10 @@ $('#band-picker').addEventListener('click', e => {
   const btn = e.target.closest('[data-band]');
   if (!btn) return;
   const id = btn.dataset.band;
-  if (!id) sel.clear();
-  else if (sel.has(id)) sel.delete(id);
-  else sel.add(id);
+  // Chaque appui ajoute un élastique de cette couleur ; au-delà du max, on revient à zéro
+  if (!id) sel = [];
+  else if (countSel(id) >= MAX_SAME) sel = sel.filter(x => x !== id);
+  else sel.push(id);
   renderLog();
 });
 $('#reps-minus').addEventListener('click', () => { reps = Math.max(1, reps - 1); $('#reps').textContent = reps; });
@@ -443,7 +457,7 @@ $('#wipe').addEventListener('click', () => {
   if (!confirm('Effacer toutes les séances et réglages ? Cette action est définitive.')) return;
   db = defaultDb();
   save();
-  sel = new Set(); reps = 5;
+  sel = []; reps = 5;
   toast('Données effacées');
   showTab('log');
 });
