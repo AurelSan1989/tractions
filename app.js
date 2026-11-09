@@ -64,6 +64,21 @@ const chips = bands => bands.length
   ? bands.map(id => { const b = bandById(id); return `<span class="chip" style="--c:${b.color}" title="${b.name}"></span>`; }).join('')
   : '<span class="chip chip-none" title="Sans élastique"></span>';
 
+/* ---------- Exercices ---------- */
+const EXERCISES = [
+  { id: 'pullup', name: 'Tractions', one: 'traction' },
+  { id: 'dip',    name: 'Dips',      one: 'dip' },
+];
+const exById = id => EXERCISES.find(e => e.id === id) || EXERCISES[0];
+// Les séries enregistrées avant l'ajout des dips n'ont pas d'exercice : ce sont des tractions
+const exOf = set => set.ex || 'pullup';
+const exSwitch = (name, current) => `<div class="seg" role="radiogroup">${EXERCISES.map(e =>
+  `<button type="button" role="radio" data-${name}="${e.id}" class="${e.id === current ? 'on' : ''}" aria-checked="${e.id === current}">${e.name}</button>`).join('')}</div>`;
+// Séances ne gardant que les séries d'un exercice (celles sans série sont écartées)
+const sessionsFor = ex => sortedSessions()
+  .map(s => ({ ...s, sets: s.sets.filter(x => exOf(x) === ex) }))
+  .filter(s => s.sets.length);
+
 function sessionStats(s) {
   const reps = s.sets.reduce((a, x) => a + x.reps, 0);
   const weighted = s.sets.reduce((a, x) => a + x.reps * assistOf(x.bands), 0);
@@ -127,6 +142,7 @@ function render() {
 // Élastiques sélectionnés, doublons permis (ex. ['green', 'green'])
 let sel = [];
 let reps = 5;
+let ex = 'pullup'; // exercice de la prochaine série
 const MAX_SAME = 3; // nombre max d'élastiques de la même couleur
 const countSel = id => sel.filter(x => x === id).length;
 
@@ -134,20 +150,36 @@ function ensureDraft() {
   if (!db.draft) db.draft = { id: null, date: today(), sets: [], note: '' };
   return db.draft;
 }
+// Dernière série faite (pour un exercice donné, ou tous si exId est absent)
+function lastSet(exId) {
+  const match = x => !exId || exOf(x) === exId;
+  const inDraft = ensureDraft().sets.filter(match).pop();
+  if (inDraft) return inDraft;
+  for (const s of sortedSessions().reverse()) {
+    const x = s.sets.filter(match).pop();
+    if (x) return x;
+  }
+  return null;
+}
 function initSelection() {
   // Reprend la dernière configuration utilisée pour aller vite
-  const d = ensureDraft();
-  const last = d.sets[d.sets.length - 1] || (() => {
-    const s = sortedSessions().pop();
-    return s && s.sets[s.sets.length - 1];
-  })();
+  const last = lastSet();
+  if (last) { ex = exOf(last); sel = [...last.bands]; reps = last.reps; }
+}
+// Changer d'exercice reprend la dernière config utilisée pour cet exercice
+function selectExercise(id) {
+  if (id === ex) return;
+  ex = id;
+  const last = lastSet(id);
   if (last) { sel = [...last.bands]; reps = last.reps; }
+  renderLog();
 }
 
 function renderLog() {
   const d = ensureDraft();
   $('#log-date').value = d.date;
   $('#log-note').value = d.note || '';
+  $('#ex-picker').innerHTML = exSwitch('ex', ex);
 
   const picker = BANDS.map(b => {
     const n = countSel(b.id);
@@ -176,7 +208,7 @@ function renderLog() {
     ? d.sets.map((s, i) => `
       <li>
         <span class="n">${i + 1}</span>
-        <span class="what">${chips(s.bands)}<small>${esc(comboName(comboKey(s.bands)))}</small></span>
+        <span class="what"><b class="ex-tag">${exById(exOf(s)).name}</b> ${chips(s.bands)}<small>${esc(comboName(comboKey(s.bands)))}</small></span>
         <span class="r">× ${s.reps}</span>
         <button type="button" class="icon-btn" data-del-set="${i}" aria-label="Supprimer la série ${i + 1}">✕</button>
       </li>`).join('')
@@ -198,17 +230,21 @@ $('#band-picker').addEventListener('click', e => {
   else sel.push(id);
   renderLog();
 });
+$('#ex-picker').addEventListener('click', e => {
+  const btn = e.target.closest('[data-ex]');
+  if (btn) selectExercise(btn.dataset.ex);
+});
 $('#reps-minus').addEventListener('click', () => { reps = Math.max(1, reps - 1); $('#reps').textContent = reps; });
 $('#reps-plus').addEventListener('click', () => { reps = Math.min(99, reps + 1); $('#reps').textContent = reps; });
 $('#log-date').addEventListener('change', e => { ensureDraft().date = e.target.value || today(); save(); });
 $('#log-note').addEventListener('input', e => { ensureDraft().note = e.target.value; save(); });
 
 $('#add-set').addEventListener('click', () => {
-  ensureDraft().sets.push({ bands: sortBands(sel), reps });
+  ensureDraft().sets.push({ ex, bands: sortBands(sel), reps });
   save();
   buzz(25);
   renderLog();
-  toast(`Série ${db.draft.sets.length} ajoutée`);
+  toast(`Série ${db.draft.sets.length} ajoutée (${exById(ex).name})`);
 });
 $('#set-list').addEventListener('click', e => {
   const btn = e.target.closest('[data-del-set]');
@@ -303,11 +339,15 @@ function barChart(points) {
 }
 
 /* ---------- Tableau de bord ---------- */
+let statsEx = null; // exercice affiché dans Progrès (par défaut : celui de la dernière série)
 function renderStats() {
-  const sessions = sortedSessions();
+  if (!statsEx) { const l = lastSet(); statsEx = l ? exOf(l) : 'pullup'; }
+  const E = exById(statsEx);
+  $('#stats-ex').innerHTML = exSwitch('stats-ex', statsEx);
+  const sessions = sessionsFor(statsEx);
   if (!sessions.length) {
     $('#kpis').innerHTML = '';
-    $('#chart-assist').innerHTML = '<p class="empty">Enregistre une première séance pour voir tes progrès.</p>';
+    $('#chart-assist').innerHTML = `<p class="empty">Aucune série de ${E.name.toLowerCase()} enregistrée pour l'instant.</p>`;
     $('#chart-volume').innerHTML = '';
     $('#records').innerHTML = '';
     $('#milestones').innerHTML = '';
@@ -325,7 +365,7 @@ function renderStats() {
     <div class="kpi"><div class="v">${sessions.length}</div><div class="l">${sessions.length > 1 ? 'Séances' : 'Séance'}</div>
       <div class="d">depuis le ${fmtDate(first.s.date)}</div></div>
     <div class="kpi"><div class="v">${bestSet}</div><div class="l">Record de rép. en une série</div></div>
-    <div class="kpi"><div class="v">${totalReps}</div><div class="l">Tractions au total</div></div>`;
+    <div class="kpi"><div class="v">${totalReps}</div><div class="l">${E.name} au total</div></div>`;
 
   $('#chart-assist').innerHTML = lineChart(stats.map(x => ({ date: x.s.date, y: x.avgAssist })), 'kg');
   $('#chart-volume').innerHTML = barChart(stats.map(x => ({ date: x.s.date, y: x.reps })));
@@ -345,7 +385,7 @@ function renderStats() {
         seen.add(key);
         milestones.push({
           date: s.date,
-          html: key ? `Première série avec ${chips(set.bands)} <b>${esc(comboName(key))}</b>` : '🎉 <b>Première traction sans élastique !</b>',
+          html: key ? `Première série avec ${chips(set.bands)} <b>${esc(comboName(key))}</b>` : `🎉 <b>Premi${E.id === 'dip' ? 'er' : 'ère'} ${E.one} sans élastique !</b>`,
         });
       }
       for (const g of repGoals) {
@@ -365,6 +405,12 @@ function renderStats() {
   $('#milestones').innerHTML = milestones.reverse().map(m =>
     `<li><span class="date">${fmtDate(m.date)}</span><span>${m.html}</span></li>`).join('');
 }
+$('#stats-ex').addEventListener('click', e => {
+  const btn = e.target.closest('[data-stats-ex]');
+  if (!btn) return;
+  statsEx = btn.dataset.statsEx;
+  renderStats();
+});
 
 /* ---------- Historique ---------- */
 function renderHistory() {
@@ -374,13 +420,21 @@ function renderHistory() {
     return;
   }
   $('#history').innerHTML = sessions.map(s => {
-    const st = sessionStats(s);
+    // Un bloc par exercice présent dans la séance
+    const blocks = EXERCISES.map(E => {
+      const sets = s.sets.filter(x => exOf(x) === E.id);
+      if (!sets.length) return '';
+      const st = sessionStats({ sets });
+      return `<div class="ex-block">
+        <span class="meta"><b>${E.name}</b> · ${plural(sets.length, 'série')} · ${st.reps} rép. · ${fmtKg(st.avgAssist)}</span>
+        <div class="sets">${sets.map(x => `<span class="set">${chips(x.bands)} ×${x.reps}</span>`).join('')}</div>
+      </div>`;
+    }).join('');
     return `<li>
       <div class="head">
         <span class="date">${esc(fmtDate(s.date, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }))}</span>
-        <span class="meta">${plural(s.sets.length, 'série')} · ${st.reps} rép. · ${fmtKg(st.avgAssist)}</span>
       </div>
-      <div class="sets">${s.sets.map(x => `<span class="set">${chips(x.bands)} ×${x.reps}</span>`).join('')}</div>
+      ${blocks}
       ${s.note ? `<p class="note">${esc(s.note)}</p>` : ''}
       <div class="actions">
         <button type="button" data-edit="${s.id}">Modifier</button>
@@ -460,7 +514,8 @@ $('#import-file').addEventListener('change', async e => {
     const d = JSON.parse(await file.text());
     const valid = d && Array.isArray(d.sessions) && d.sessions.every(s =>
       s && typeof s.date === 'string' && Array.isArray(s.sets) &&
-      s.sets.every(x => x && Number.isFinite(x.reps) && Array.isArray(x.bands) && x.bands.every(bandById)));
+      s.sets.every(x => x && Number.isFinite(x.reps) && Array.isArray(x.bands) && x.bands.every(bandById) &&
+      (x.ex === undefined || EXERCISES.some(e => e.id === x.ex))));
     if (!valid) throw new Error('format');
     if (!(await ask(`Importer ${plural(d.sessions.length, 'séance')} ? Les données actuelles seront remplacées.`, 'Importer'))) return;
     db.sessions = d.sessions.map(s => ({ ...s, id: s.id || uid() }));

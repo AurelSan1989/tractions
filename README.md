@@ -5,8 +5,9 @@ Aucun compte, aucun serveur : les données restent dans le navigateur du télép
 
 ## Fonctionnalités
 
+- **Exercices** : tractions et dips, mélangeables dans une même séance (on choisit l'exercice avant chaque série). Les séances enregistrées avant l'ajout des dips comptent comme des tractions.
 - **Séance** : choix de l'élastique (ou de plusieurs combinés, y compris jusqu'à 3 de la même couleur en appuyant plusieurs fois, ou « sans »), nombre de répétitions, plusieurs séries par séance, note, date modifiable.
-- **Progrès** : aide moyenne par séance (en kg, pondérée par les répétitions), répétitions par séance, records par configuration d'élastiques, jalons (premier passage à un élastique plus fin, première traction sans aide…).
+- **Progrès** (avec un sélecteur Tractions / Dips) : aide moyenne par séance (en kg, pondérée par les répétitions), répétitions par séance, records par configuration d'élastiques, jalons (premier passage à un élastique plus fin, première traction sans aide…).
 - **Historique** : modifier ou supprimer une séance.
 - **Réglages** : aide en kg de chaque élastique (par défaut, le milieu de la fourchette du fabricant), export et import JSON, remise à zéro.
 
